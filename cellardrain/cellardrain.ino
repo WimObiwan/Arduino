@@ -38,23 +38,20 @@
 
 Ultrasonic ultrasonic(PIN_ULTRASONIC);
 
-inline void swap(long &a, long &b)
-{
-  long t = a;
-  a = b;
-  b = t;
-}
-
 long median5(long a, long b, long c, long d, long e)
 {
-  if (a > b) swap(a, b);
-  if (c > d) swap(c, d);
-  if (a > c) swap(a, c);
-  if (b > d) swap(b, d);
-  if (b > c) swap(b, c);
-  if (d > e) swap(d, e);
-  if (c > d) swap(c, d);
-  return c;
+  long arr[5] = {a, b, c, d, e};
+  // Simple bubble sort for 5 elements
+  for (int i = 0; i < 4; i++) {
+    for (int j = 0; j < 4 - i; j++) {
+      if (arr[j] > arr[j + 1]) {
+        long t = arr[j];
+        arr[j] = arr[j + 1];
+        arr[j + 1] = t;
+      }
+    }
+  }
+  return arr[2];  // Return the middle element
 }
 
 int getLevelUltrasonic(char* szDebug)
@@ -73,6 +70,8 @@ int getLevelUltrasonic(char* szDebug)
 
   if (level >= SENSOR_OFFSET)
     return 0;
+  if (level <= 0)
+    return SENSOR_OFFSET;
 
   return SENSOR_OFFSET - level;
 }
@@ -198,7 +197,7 @@ int getLevelCapacitive10(char* szDebug)
       }
     }
 
-    char szText[10];
+    char szText[12];
     sprintf(szText, "%03x", touch_val);
     Serial.print("touch_val = ");
     Serial.println(szText);
@@ -354,9 +353,20 @@ void noBacklightDisplay() {
 
 void printDisplay(const char *text, const char *text2) {
   lcd.clear();
-  lcd.print(text);
+  delay(2);  // LCD needs time after clear
+  
+  // Print first line (max 16 chars)
+  char line1[17];
+  strncpy(line1, text, 16);
+  line1[16] = '\0';
+  lcd.print(line1);
+  
+  // Print second line (max 16 chars)
   lcd.setCursor(0,1);
-  lcd.print(text2);
+  char line2[17];
+  strncpy(line2, text2, 16);
+  line2[16] = '\0';
+  lcd.print(line2);
 }
 
 #endif // ENABLE_DISPLAY
@@ -397,9 +407,9 @@ void setup() {
   #ifdef ENABLE_DISPLAY
   {
     greenBacklightDisplay();
-    char szText[20];
-    sprintf(szText, "Version: %s", __DATE__);
-    printDisplay("Arduino Waterpump", szText);
+    char szText[17];
+    snprintf(szText, sizeof(szText), "Ver: %s", __DATE__);
+    printDisplay("Arduino Pump", szText);
     delay(4000);
     sprintf(szText, "%dmm - %dmm", THRESHOLD_LOW, THRESHOLD_HIGH);
     printDisplay("Using thresholds:", szText);
@@ -585,14 +595,24 @@ void loop()
   #endif
 
   #ifdef ENABLE_DISPLAY
-  char szTemp[6];
-  dtostrf(temp_hum_val[1], 4, 1, szTemp);
-  char szHum[6];
-  dtostrf(temp_hum_val[0], 4, 1, szHum);
+  // Clamp values to avoid buffer overflow from dtostrf
+  float temp = temp_hum_val[1];
+  float hum = temp_hum_val[0];
+  if (temp < -99.9f) temp = -99.9f;
+  if (temp > 999.9f) temp = 999.9f;
+  if (hum < 0.0f) hum = 0.0f;
+  if (hum > 100.0f) hum = 100.0f;
+  
+  char szTemp[8];
+  dtostrf(temp, 4, 1, szTemp);
+  szTemp[7] = '\0';  // Ensure null termination
+  char szHum[8];
+  dtostrf(hum, 4, 1, szHum);
+  szHum[7] = '\0';  // Ensure null termination
 
-  // Print a message to the LCD.
-  char line[20];
-  sprintf(line, "%dmm  %sC %s%%", level, szTemp, szHum);
+  // Print a message to the LCD (max 16 chars per line)
+  char line[17];
+  snprintf(line, sizeof(line), "%dmm %sC %s%%", level, szTemp, szHum);
   printDisplay(line, szLine2);
   #endif
     
